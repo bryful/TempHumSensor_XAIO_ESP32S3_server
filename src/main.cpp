@@ -340,13 +340,16 @@ void footorPrint(int col)
 {
 
   scrbuf.fillScreen(TFT_BLACK);
+
+  int bitV = (nextTime>>3) & 0b11111;
   for (int i = 0; i < 5; i++)
   {
-    scrbuf.drawRect(20 + i * 30, 2, 24, 6, col);
-    if (random(100) < 50)
+    if (bitV & 0x01 == 0x01)
     {
       scrbuf.fillRect(20 + i * 30, 2, 24, 6, col);
     }
+    bitV = bitV >> 1;
+    scrbuf.drawRect(20 + i * 30, 2, 24, 6, col);
   }
   scrbuf.setCursor(180, 0);
   scrbuf.setFont(&fonts::lgfxJapanGothic_8);
@@ -401,7 +404,7 @@ void SerialSelect()
   {
     if (tx == "getid")
     {
-      Serial.print(fsu.getBoardName("ESP32C3-xxx"));
+      Serial.print(fsu.getBoardName(""));
     }
     else if (tx == "getstatus")
     {
