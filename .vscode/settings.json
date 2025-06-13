@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "*.hpp": "cpp",
+        "thread": "cpp"
+    }
+}
