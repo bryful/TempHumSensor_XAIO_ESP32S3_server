@@ -15,12 +15,13 @@
 #define LED_PIN (44)
 // クライアントの最大数
 #define MAX_CLIENTS 6
-// クライアントの接続チェックこの数値以上エラーがあったら注意表示
-#define TIMEOUT_COUNT 3
 // 画面書き換えタイミング1秒ごと
-#define SCAN_MSEC 1000
+// #define SCAN_MSEC 1000
+#define SCAN_MSEC 15000
 // 接続チェックのタイミング
 #define SCAN_TIME 60000
+// クライアントの接続チェックこの数値以上エラーがあったら注意表示
+#define TIMEOUT_COUNT 3
 
 // 画面サイズ
 #define SCR_WIDTH 240
@@ -131,6 +132,10 @@ void setupWiFiAndTime()
 
   DisplayClear();
   display.println("Connecting WiFi...");
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    WiFi.disconnect();
+  }
   // 固定IP設定
 
   int lc[4] = {0, 0, 0, 0};
@@ -168,13 +173,38 @@ void setupWiFiAndTime()
   }
   WiFi.setHostname(HostName);
   WiFi.begin();
-  WiFi.setTxPower(WIFI_POWER_8_5dBm);
+  // WiFi.setTxPower(WIFI_POWER_8_5dBm);
+  int retry = 0;
+  bool done = true;
   while (WiFi.status() != WL_CONNECTED)
   {
-    display.println("*");
+    if (WiFi.status() == WL_CONNECTED)
+    {
+      break;
+      ;
+    }
+    display.print("*");
     delay(250);
+    if (retry % 10 == 9)
+    {
+      WiFi.disconnect();
+      WiFi.reconnect();
+    }
+    else if (retry > 30)
+    {
+      break;
+      ;
+    }
+    retry++;
   }
-  display.println("\nWiFi Connected!");
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    display.println("\nWiFi Connected!");
+  }
+  else
+  {
+    display.println("\nWiFi Failed");
+  }
 
   getNTP();
 }
@@ -341,7 +371,7 @@ void footorPrint(int col)
 
   scrbuf.fillScreen(TFT_BLACK);
 
-  int bitV = (nextTime>>3) & 0b11111;
+  int bitV = (nextTime >> 3) & 0b11111;
   for (int i = 0; i < 5; i++)
   {
     if (bitV & 0x01 == 0x01)
@@ -472,6 +502,10 @@ void loop()
   SerialSelect();
   unsigned long now = millis();
 
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    setupWiFiAndTime();
+  }
   WiFiClient client = server.available();
   bool refF = false;
   if (client)
