@@ -23,6 +23,7 @@ XIAO ESP32S3を使った温度湿度計。WiFi(tcp)で子機から送られて�
 * 最大6機の子機からの湿度リスト。
 * 30%以上になったら黄色く警戒色に
 * 初めてのardiunoのプログラムなのでなるべく簡単に
+* WifiのSSIDパスワード親機のIPアドレス等のプライベート情報はコードに記入しないで、USB接続シリアル通信で設定。
 <br>
 現在とりあえず作っていろいろ調整中。
 
@@ -57,9 +58,7 @@ platform_packages = platformio/tool-esptoolpy@1.40801.0
 * CS         → GPIO04
 * BLK        → GPIO43
 
-ピンは3.3vピンを基準に適当に配置。結構好きに変更可能。<br>
-lovyan03/LovyanGFX@^1.2.7 を使用
-
+SDA/SCLをl2cの為に開けて配置
 
 ## Dependency
 VScode + PlatfornIO
