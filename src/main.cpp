@@ -17,11 +17,15 @@
 #define MAX_CLIENTS 6
 // 画面書き換えタイミング1秒ごと
 // #define SCAN_MSEC 1000
-#define SCAN_MSEC 15000
+#define SCAN_MSEC (60 * 1000)
 // 接続チェックのタイミング
-#define SCAN_TIME 60000
+#define SCAN_TIME (30 * 60 * 1000)
 // クライアントの接続チェックこの数値以上エラーがあったら注意表示
 #define TIMEOUT_COUNT 3
+
+#define SCR_DOWN_MSEC (20 * 1000)
+#define SCR_BR_MAX 90
+#define SCR_BR_MIN 15
 
 // 画面サイズ
 #define SCR_WIDTH 240
@@ -49,6 +53,7 @@ SensorData OwnTemp;
 const char *HostName = "Temp-Hum Senssor by bry-ful";
 unsigned long nextTime = 0;
 unsigned long errorTime = 0;
+unsigned long brTime = 0;
 
 // -----------------------------------------------------------------------
 // 画面の消去
@@ -58,11 +63,13 @@ void DisplayClear()
   display.setCursor(0, 0);
   display.setTextSize(1);
   display.setTextColor(TFT_WHITE);
+  display.setBrightness(80);
 }
 // 画面へメッセージ
 void DisplayPrint(String s)
 {
   DisplayClear();
+  display.setBrightness(100);
   display.println(s);
   // 10秒表示
   nextTime = millis() + 10000;
@@ -115,14 +122,15 @@ bool getNTP()
     delay(500);
     retry++;
   }
+  display.print("\n");
   if (retry < 0)
   {
-    DisplayPrint("ERROR getNTP / getLocalTime()");
+    DisplayPrint("ERROR NTP/getLocalTime()");
     ret = false;
   }
   else
   {
-    display.println("\nNTP OK!");
+    display.println("NTP OK!");
     ret = true;
   }
   return ret;
@@ -184,7 +192,7 @@ void setupWiFiAndTime()
       ;
     }
     display.print("*");
-    delay(250);
+    delay(350);
     if (retry % 10 == 9)
     {
       WiFi.disconnect();
@@ -235,7 +243,7 @@ void readOwnTemp()
   struct tm timeinfo;
   getLocalTime(&timeinfo);
   char timeStr[20];
-  strftime(timeStr, sizeof(timeStr), "%Y/%m/%d %H:%M:%S", &timeinfo);
+  strftime(timeStr, sizeof(timeStr), "%Y/%m/%d %H:%M", &timeinfo);
 
   OwnTemp.temp = temp.temperature;
   OwnTemp.hum = humidity.relative_humidity;
@@ -343,7 +351,7 @@ void scrbudPrint(int index)
 
   double x = (cos(hr * PI / 180) * l);
   double y = (sin(hr * PI / 180) * l);
-  scrbuf.drawArc(xp, yp, 18, 18, st, (int)hr, TFT_LIGHTGREY);
+  scrbuf.drawArc(xp, yp, 18, 18, st, (int)hr, col);
   scrbuf.drawLine((int)(xp + x * 0.1), (int)(yp + y * 0.1), (int)(xp + x), (int)(yp + y), col);
   scrbuf.drawCircle(xp, yp, 6, col);
   // 湿度
@@ -405,8 +413,10 @@ void PrintScrren()
     scrbuf.pushSprite(0, SCR_HEAD_HEIGHT + SCR_LINE_HEIGHT * i);
   }
 
+  brTime = millis() + SCR_DOWN_MSEC;
   footorPrint(TFT_WHITE);
   scrbuf.pushSprite(0, SCR_HEAD_HEIGHT + SCR_LINE_HEIGHT * 6);
+  display.setBrightness(SCR_BR_MAX);
 }
 
 // ==== 未受信カウント更新 ====
@@ -450,6 +460,20 @@ void SerialSelect()
   if (fsu.JsonCMDCheck(jd, &res))
   {
     isSend = true;
+    if (!jd["setBr"].isNull())
+    {
+      int br = jd["setBr"].as<int>();
+      if (br >= 0)
+      {
+        display.setBrightness(br);
+      }
+      res["setBr"] = br;
+    }
+    else if (!jd["getBr"].isNull())
+    {
+      Serial.printf("brightness:%d", display.getBrightness());
+      res["getBr"] = display.getBrightness();
+    }
   }
 
   if (isSend)
@@ -464,6 +488,7 @@ void setup()
 {
   Serial.begin(115200);
   setupDisplay();
+  display.setBrightness(100);
   setupWiFiAndTime();
 
   server.begin();
@@ -495,6 +520,8 @@ void setup()
   nextTime = millis() + SCAN_MSEC;
   errorTime = millis() + SCAN_TIME;
   display.fillScreen(TFT_BLACK);
+  readOwnTemp();
+  PrintScrren();
 }
 
 void loop()
@@ -535,6 +562,17 @@ void loop()
     incrementMissedCounts();
     errorTime = now + SCAN_TIME;
     refF = true;
+  }
+  if (now > brTime)
+  {
+    for (int i = SCR_BR_MAX; i >= SCR_BR_MIN; i--)
+    {
+      display.setBrightness(i);
+      delay(10);
+    }
+    display.setBrightness(5);
+    brTime = now + millis();
+    ;
   }
   if (refF)
   {
