@@ -217,19 +217,89 @@ void setupWiFiAndTime()
   getNTP();
 }
 
+int findID(String id)
+{
+  int ret = -1;
+  for (int i = 0; i < MAX_CLIENTS; i++)
+  {
+    if (clients[i].id == id)
+    {
+      ret = i;
+      break;
+    }
+  }
+  return ret;
+}
+void SwapItemSub(int s, int d)
+{
+  if (s == d)
+    return;
+  struct SensorData sd;
+  sd = clients[s];
+  clients[s] = clients[d];
+  clients[d] = sd;
+}
+void SwapItem(int cnt)
+{
+  int pos = 0;
+  int item = findID("ABS");
+  if ((cnt > 1) && (item >= 0) && (item != 0))
+  {
+    SwapItemSub(item, 0);
+  }
+  item = findID("Etc");
+  if ((cnt >= 2) && (item >= 0) && (item != 1))
+  {
+    SwapItemSub(item, 1);
+  }
+  item = findID("PETG");
+  if ((cnt >= 3) && (item >= 0) && (item != 2))
+  {
+    SwapItemSub(item, 2);
+  }
+  item = findID("ABS-02");
+  if ((cnt >= 4) && (item >= 0) && (item != 3))
+  {
+    SwapItemSub(item, 3);
+  }
+}
 // ==== clientの更新 ====
 void updateClientData(const String &id, const String &timeStr, float temp, float hum)
 {
+  int cnt = 4;
   for (int i = 0; i < MAX_CLIENTS; i++)
   {
     if (clients[i].id == id || clients[i].id == "")
     {
-      clients[i].id = id;
-      clients[i].timeStr = timeStr;
-      clients[i].temp = temp;
-      clients[i].hum = hum;
-      clients[i].missedCount = 0;
-      return;
+      int p = i;
+      if (id == "ABS")
+      {
+        p = 0;
+      }
+      else if (id == "Etc")
+      {
+        p = 1;
+      }
+      else if (id == "PETG")
+      {
+        p = 2;
+      }
+      else if (id == "ABS-02")
+      {
+        p = 3;
+      }
+      else
+      {
+        p = cnt;
+        cnt++;
+      }
+
+      clients[p].id = id;
+      clients[p].timeStr = timeStr;
+      clients[p].temp = temp;
+      clients[p].hum = hum;
+      clients[p].missedCount = 0;
+      break;
     }
   }
 }
@@ -249,6 +319,19 @@ void readOwnTemp()
   OwnTemp.hum = humidity.relative_humidity;
   OwnTemp.pres = pres;
   OwnTemp.timeStr = timeStr;
+}
+String toSuji(float v)
+{
+  if (v < 0)
+    v *= -1;
+  int v1 = (int)v;
+  int v2 = (int)((v - v1) * 10);
+  String ret = String(v1) + "." + String(v2);
+  if (v < 10)
+  {
+    ret = " " + ret;
+  }
+  return ret;
 }
 // ==== 上部表示の更新 ====
 void headbudPrint(int col)
@@ -321,12 +404,19 @@ void scrbudPrint(int index)
   scrbuf.setFont(&fonts::lgfxJapanGothic_24);
   if (mode == -1)
   {
-    scrbuf.print("--.-℃");
+    scrbuf.print("--.-");
   }
   else
   {
-    scrbuf.printf("%.1f℃", t);
+    scrbuf.print(toSuji(t));
   }
+  if (t < 0)
+  {
+    scrbuf.drawLine(5, 12, 12, 12);
+  }
+  scrbuf.setFont(&fonts::lgfxJapanGothic_16);
+  scrbuf.setCursor(65, 25);
+  scrbuf.print("℃");
 
   // 下線
   scrbuf.drawLine(10, SCR_LINE_HEIGHT - 1, SCR_WIDTH - 10, SCR_LINE_HEIGHT - 1);
@@ -367,7 +457,7 @@ void scrbudPrint(int index)
   }
   else
   {
-    scrbuf.printf("%.1f", h);
+    scrbuf.print(toSuji(h));
   }
   scrbuf.setFont(&fonts::lgfxJapanGothic_24);
   scrbuf.setCursor(205, 16);
