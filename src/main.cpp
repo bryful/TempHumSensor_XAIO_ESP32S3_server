@@ -15,13 +15,15 @@
 #define LED_PIN (44)
 // クライアントの最大数
 #define MAX_CLIENTS 6
-// 画面書き換えタイミング1秒ごと
-// #define SCAN_MSEC 1000
-#define SCAN_MSEC (60 * 1000)
+// 画面書き換えタイミング60秒ごと
+#define DISPLAY_REFRESH_MSEC (60 * 1000)
+// #define DISPLAY_REFRESH_MSEC 1000
 // 接続チェックのタイミング
-#define SCAN_TIME (30 * 60 * 1000)
+#define SCAN_TIMING_MSEC_DEF (30 * 60 * 1000)
 // クライアントの接続チェックこの数値以上エラーがあったら注意表示
 #define TIMEOUT_COUNT 3
+
+#define SCAN_TIIMING_KEY "scantiming"
 
 #define SCR_DOWN_MSEC (20 * 1000)
 #define SCR_BR_MAX 90
@@ -51,9 +53,12 @@ SensorData clients[MAX_CLIENTS];
 SensorData OwnTemp;
 
 const char *HostName = "Temp-Hum Senssor by bry-ful";
-unsigned long nextTime = 0;
-unsigned long errorTime = 0;
-unsigned long brTime = 0;
+unsigned long scan_timing = SCAN_TIMING_MSEC_DEF;
+// unsigned long scan_errtime = SCAN_TIMING_MSEC_DEF * TIMEOUT_COUNT;
+
+unsigned long dispTime = 0;
+unsigned long scanTime = 0;
+unsigned long brightTime = 0;
 
 // -----------------------------------------------------------------------
 // 画面の消去
@@ -72,7 +77,7 @@ void DisplayPrint(String s)
   display.setBrightness(100);
   display.println(s);
   // 10秒表示
-  nextTime = millis() + 10000;
+  dispTime = millis() + 10000;
 }
 // ==== ディスプレイ初期化 ====
 void setupDisplay()
@@ -152,13 +157,13 @@ void setupWiFiAndTime()
   {
     Serial.println("ERR ! fixedip");
     display.printf("ERR! fixedip / \nserverip\n%d.%d.%d.%d", lc[0], lc[1], lc[2], lc[3]);
-    nextTime = millis() + 10000;
+    dispTime = millis() + 10000;
   }
   if (fsu.getPrefIPA(GATWAY_IP_KEY, gw) == false)
   {
     Serial.println("ERR ! gateway");
     display.printf("gateway %d.%d.%d.%d", lc[0], lc[1], lc[2], lc[3]);
-    nextTime = millis() + 10000;
+    dispTime = millis() + 10000;
   }
   if ((lc[0] != 0) && (gw[0] != 0))
   {
@@ -171,12 +176,12 @@ void setupWiFiAndTime()
     {
       display.setCursor(10, 70);
       display.println("STA Failed to configure");
-      nextTime = millis() + 10000;
+      dispTime = millis() + 10000;
     }
     else
     {
       display.printf("Config OK!\nip:%s\n", WiFi.localIP().toString());
-      nextTime = millis() + 10000;
+      dispTime = millis() + 10000;
     }
   }
   WiFi.setHostname(HostName);
@@ -343,7 +348,7 @@ void headbudPrint(int col)
   headbuf.setCursor(10, 2);
   headbuf.println("Temp-Hum Sensor by bry-ful");
   headbuf.setCursor(30, 20);
-  headbuf.println(OwnTemp.timeStr);
+  headbuf.printf("%s - %.1f", OwnTemp.timeStr.c_str(), ((float)scan_timing / 1000));
   headbuf.setCursor(30, 38);
   headbuf.setTextSize(1);
   headbuf.printf("%.1f℃ %.1f%% %.1fpHa", OwnTemp.temp, OwnTemp.hum, OwnTemp.pres);
@@ -469,7 +474,7 @@ void footorPrint(int col)
 
   scrbuf.fillScreen(TFT_BLACK);
 
-  int bitV = (nextTime >> 3) & 0b11111;
+  int bitV = (dispTime >> 3) & 0b11111;
   for (int i = 0; i < 5; i++)
   {
     if (bitV & 0x01 == 0x01)
@@ -503,7 +508,7 @@ void PrintScrren()
     scrbuf.pushSprite(0, SCR_HEAD_HEIGHT + SCR_LINE_HEIGHT * i);
   }
 
-  brTime = millis() + SCR_DOWN_MSEC;
+  brightTime = millis() + SCR_DOWN_MSEC;
   footorPrint(TFT_WHITE);
   scrbuf.pushSprite(0, SCR_HEAD_HEIGHT + SCR_LINE_HEIGHT * 6);
   display.setBrightness(SCR_BR_MAX);
@@ -564,6 +569,32 @@ void SerialSelect()
       Serial.printf("brightness:%d", display.getBrightness());
       res["getBr"] = display.getBrightness();
     }
+    else if (!jd["setScanTime"].isNull())
+    {
+      unsigned long v = jd["setScanTime"].as<unsigned long>();
+      if (v >= 0)
+      {
+        scan_timing = v;
+        int ff = fsu.setPrefULong(SCAN_TIIMING_KEY, v);
+        v = fsu.getPrefULong(SCAN_TIIMING_KEY, v);
+        Serial.println("ST" + String(v));
+      }
+      res["setScanTime"] = scan_timing;
+    }
+    else if (!jd["getScanTime"].isNull())
+    {
+      unsigned long v = fsu.getPrefULong(SCAN_TIIMING_KEY, 0);
+      if (v > 0)
+      {
+        scan_timing = v;
+      }
+      else
+      {
+        // scan_timing = DISPLAY_REFRESH_MSEC;
+      }
+      Serial.printf("scantime:%d/%d\n", v, scan_timing);
+      res["getScanTime"] = scan_timing;
+    }
   }
 
   if (isSend)
@@ -607,8 +638,21 @@ void setup()
                     Adafruit_BMP280::FILTER_X16,      /* Filtering. */
                     Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
   }
-  nextTime = millis() + SCAN_MSEC;
-  errorTime = millis() + SCAN_TIME;
+
+  unsigned long v = fsu.getPrefULong(SCAN_TIIMING_KEY, 0);
+  if (v > 0)
+  {
+    scan_timing = v;
+  }
+  else
+  {
+    fsu.setPrefULong(SCAN_TIIMING_KEY, SCAN_TIMING_MSEC_DEF);
+  }
+  Serial.println("scantiming:" + String(scan_timing));
+
+  dispTime = millis() + DISPLAY_REFRESH_MSEC;
+  scanTime = millis() + scan_timing;
+  brightTime = millis() + SCR_DOWN_MSEC;
   display.fillScreen(TFT_BLACK);
   readOwnTemp();
   PrintScrren();
@@ -638,34 +682,44 @@ void loop()
       float hum = doc["hum"];
       updateClientData(id, timeStr, temp, hum);
       refF = true;
+
+      // 受信後、クライアントにACKと次回スリープ時間を送信
+      JsonDocument responseDoc;
+      responseDoc["ack"] = true;
+      responseDoc["scantiming"] = scan_timing;
+
+      String responseStr;
+      serializeJson(responseDoc, responseStr);
+      client.print(responseStr);
     }
     client.stop();
   }
-  if (now > nextTime)
+  if (now > dispTime)
   {
-    readOwnTemp();
-    nextTime = now + SCAN_MSEC;
+    dispTime = now + DISPLAY_REFRESH_MSEC;
     refF = true;
   }
-  if (now > errorTime)
+  if (now > scanTime)
   {
     incrementMissedCounts();
-    errorTime = now + SCAN_TIME;
+    scanTime = now + scan_timing;
     refF = true;
   }
-  if (now > brTime)
+  if (now > brightTime)
   {
+    // フェードアウト
     for (int i = SCR_BR_MAX; i >= SCR_BR_MIN; i--)
     {
       display.setBrightness(i);
       delay(10);
     }
     display.setBrightness(5);
-    brTime = now + millis();
+    brightTime = millis() + SCR_DOWN_MSEC;
     ;
   }
   if (refF)
   {
+    readOwnTemp();
     PrintScrren();
   }
 }

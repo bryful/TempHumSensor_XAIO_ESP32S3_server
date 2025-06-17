@@ -24,7 +24,7 @@ class FsUtils
 {
 private:
 public:
-    // Preferences pref;
+    //Preferences prrference;
     FsUtils();
     ~FsUtils();
     int split(String data, char delimiter, String *dst);
@@ -32,6 +32,9 @@ public:
     String getPrefString(String key, String def);
     bool setPrefString(String key, String str);
     bool getPrefIPA(String key, int *adr);
+
+    bool setPrefULong(String key, u64_t v);
+    u64_t getPrefULong(String key, u64_t def);
 
     String getBoardName(String def);
     bool setBoardName(String bn);

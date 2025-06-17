@@ -2,7 +2,7 @@
 
 FsUtils::FsUtils()
 {
-    // pref.begin(PREF_NAMESPACE, false);
+    // prrference.begin(PREF_NAMESPACE, false);
 }
 FsUtils::~FsUtils()
 {
@@ -77,11 +77,9 @@ bool FsUtils::setPrefString(String key, String str)
 
     if (pref.begin(PREF_NAMESPACE, false) == false)
         return ret;
-    Serial.println(key);
-    Serial.println(str);
-    size_t a = pref.putString(key.c_str(), str);
-    Serial.printf("%d\n", a);
-    ret = true;
+    ret = pref.putString(key.c_str(), str);
+    delay(100);
+    Serial.printf("putString result %d", ret);
     pref.end();
     return ret;
 }
@@ -356,5 +354,27 @@ bool FsUtils::Wifi_Begin(const char *ssid, const char *password)
         Serial.println("Wifi Connected!");
     }
 
+    return ret;
+}
+bool FsUtils::setPrefULong(String key, u64_t v)
+{
+    bool ret = false;
+    Preferences pref;
+
+    if (pref.begin(PREF_NAMESPACE, false) == false)
+        return ret;
+    ret = pref.putULong64(key.c_str(), v);
+    pref.end();
+    return ret;
+}
+u64_t FsUtils::getPrefULong(String key, u64_t def)
+{
+    u64_t ret = def;
+    Preferences pref;
+
+    if (pref.begin(PREF_NAMESPACE, false) == false)
+        return ret;
+    ret = pref.getULong64(key.c_str(), def);
+    pref.end();
     return ret;
 }
